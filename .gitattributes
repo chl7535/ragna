@@ -1,0 +1,10 @@
+*.cs text eol=lf
+*.md text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.ttf binary
+# Unity's serializer emits blank scalar values with trailing spaces.
+*.asset -whitespace
+*.meta -whitespace
+*.unity -whitespace
+*.prefab -whitespace

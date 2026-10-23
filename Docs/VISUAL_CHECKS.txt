@@ -1,0 +1,1 @@
+PASS: 196 visual checks; 28 rendered skill stages. Pixel poses, cache reuse, distinct frame content and effect bounds verified.

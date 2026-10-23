@@ -1,0 +1,1 @@
+PASS: 24 UI checks (tutorial, potion, pause, promotion, blessing, rebirth, death). Save untouched.

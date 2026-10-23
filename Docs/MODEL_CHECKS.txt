@@ -1,0 +1,9 @@
+PASS: 68 checks
+Warrior: active=Victory floor=30 level=120 skill=39 time=337s; idle=Dead floor=30
+Archer: active=Victory floor=30 level=120 skill=39 time=334s; idle=Dead floor=30
+Mage: active=Victory floor=30 level=120 skill=38 time=332s; idle=Dead floor=30
+Gunner: active=Victory floor=30 level=120 skill=38 time=334s; idle=Dead floor=30
+Fighter: active=Victory floor=30 level=120 skill=36 time=329s; idle=Dead floor=10
+Cleric: active=Victory floor=30 level=120 skill=39 time=338s; idle=Dead floor=30
+Rogue: active=Victory floor=30 level=120 skill=37 time=323s; idle=Dead floor=30
+Berserker: active=Victory floor=30 level=120 time=320s
