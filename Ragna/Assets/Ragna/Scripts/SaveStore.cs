@@ -7,7 +7,7 @@ namespace Ragna
 {
     [Serializable] public sealed class SaveEnvelope
     {
-        public int version = 4;
+        public int version = 7;
         public bool hasRun;
         public MetaProgress meta;
         public RunSnapshot run;
@@ -33,7 +33,7 @@ namespace Ragna
         public static SaveEnvelope Parse(string json)
         {
             var save = JsonUtility.FromJson<SaveEnvelope>(json);
-            if (save == null || save.version < 1 || save.version > 4 || save.meta == null)
+            if (save == null || save.version < 1 || save.version > 7 || save.meta == null)
                 throw new InvalidDataException("지원하지 않는 저장 형식");
             save.meta.Sanitize();
             // Unity's value serializer can materialize a null class as an empty object.
@@ -60,10 +60,36 @@ namespace Ragna
                         if (save.run.state == RunState.Promotion) save.run.state = RunState.Fighting;
                     }
                 }
+                if (save.version < 7 && save.run != null && (int)save.run.job >= 1 && (int)save.run.job <= 6)
+                {
+                    save.run.job = save.run.level < 20 ? Job.Adventurer : Job.Warrior;
+                    save.run.promotion = save.run.level < 20 ? 0 : Mathf.Max(1, save.run.promotion);
+                    save.run.careerId = "";
+                    if (save.run.promotion >= 2) save.run.careerId = "knight";
+                }
                 var check = new RunModel(save.meta);
+                if (save.version < 5 && save.run != null)
+                {
+                    check.run = save.run; check.ResizePlan();
+                    save.run.activePlan = Array.Empty<string>(); save.run.comboIndex = 0;
+                    save.run.turnSide = TurnSide.Player; save.run.turnTimer = .35f;
+                    save.run.playerTurns = save.run.enemyTurns = save.run.enemyActorId = 0;
+                    if (save.run.state == RunState.Fighting) save.run.state = RunState.Preparation;
+                }
+                if (save.version < 6 && save.run != null)
+                {
+                    save.run.heroX = RunModel.HeroX; save.run.heroY = RunModel.GroundY; save.run.facing = 1;
+                    save.run.turnTimer = .35f; save.run.enemyActorId = 0;
+                    foreach (var enemy in save.run.enemies)
+                    {
+                        var feet = HuntingMapSettings.Current.Clamp(new Vector2(enemy.x, enemy.y - .65f));
+                        enemy.x = feet.x; enemy.y = feet.y;
+                        enemy.attackTimer = HuntingMapSettings.Current.enemyAttackInterval;
+                    }
+                }
                 if (!check.Restore(save.run)) throw new InvalidDataException("진행 데이터 오류");
             }
-            save.version = 4; return save;
+            save.version = 7; return save;
         }
         public static bool Save(RunModel model)
         {

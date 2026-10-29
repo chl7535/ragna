@@ -97,16 +97,10 @@ namespace Ragna
                 Rect(t, 15, 19, 3, 3, gold);
                 if (ascension >= 3) { Rect(t, 6, 25, 5, 2, gold); Rect(t, 22, 25, 5, 2, gold); }
             }
-            // Recognizable weapon silhouettes for all seven classes.
+            // Sword silhouettes for the current route.
             switch (job)
             {
                 case Job.Warrior: Rect(t, 26, 10, 2, 20 + tier * 2, Outline); Rect(t, 26, 17, 2, 12 + tier * 2, Color.white); Rect(t, 23, 15, 8, 2, c); break;
-                case Job.Archer: Rect(t, 27, 12, 2, 18, c); Rect(t, 29, 15, 2, 12, dark); Rect(t, 25, 13, 1, 16, Color.white); break;
-                case Job.Mage: Rect(t, 27, 7, 2, 25, dark); Rect(t, 25, 29, 6, 6, c); Rect(t, 27, 31, 2, 2, Color.white); Rect(t, 11, 34, 12, 2, c); break;
-                case Job.Gunner: Rect(t, 24, 20, 8, 4, Outline); Rect(t, 24, 23, 7, 2, c); Rect(t, 25, 16, 3, 5, dark); break;
-                case Job.Fighter: Rect(t, 5, 14, 7, 7, c); Rect(t, 23, 14, 7, 7, c); Rect(t, 6, 18, 5, 2, Color.white); break;
-                case Job.Cleric: Rect(t, 27, 8, 2, 27, c); Rect(t, 24, 29, 8, 2, Color.white); Rect(t, 27, 27, 2, 7, Color.white); break;
-                case Job.Rogue: Rect(t, 6, 10, 2, 10, Color.white); Rect(t, 27, 10, 2, 10, Color.white); Rect(t, 12, 26, 9, 2, dark); break;
             }
             if (careerStyle == 1)
             {

@@ -35,8 +35,8 @@ namespace Ragna
                 region = next;
             }
             if (floor != run.floor) { floor = run.floor; enteredAt = run.time; }
-            float top = camera.ViewportToWorldPoint(new Vector3(.5f, .795f, 10)).y;
-            float bottom = camera.ViewportToWorldPoint(new Vector3(.5f, .285f, 10)).y;
+            float top = camera.ViewportToWorldPoint(new Vector3(.5f, LandscapeDisplaySettings.Current.battleTop, 10)).y;
+            float bottom = camera.ViewportToWorldPoint(new Vector3(.5f, LandscapeDisplaySettings.Current.battleBottom, 10)).y;
             float viewportWidth = camera.orthographicSize * 2 * camera.aspect;
             float aspect = image.sprite.rect.width / image.sprite.rect.height;
             float road = BackgroundCatalog.Roads[region];

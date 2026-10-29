@@ -13,7 +13,7 @@ namespace Ragna.Editor
         static void Check(bool condition, string name)
         { if (!condition) throw new Exception("FAIL: " + name); count++; }
         static RunModel Fresh(uint seed = 731)
-        { var model = new RunModel(new MetaProgress()); model.Start(seed); return model; }
+        { var model = new RunModel(new MetaProgress()); model.Start(seed); model.BeginCombat(); return model; }
         [MenuItem("Ragna/Run model checks")]
         public static void Menu() => Debug.Log(Run());
         [CliCommand("ragna_checks", "Run deterministic combat, progression, save and rebirth checks", MainThreadRequired = true)]
@@ -24,12 +24,12 @@ namespace Ragna.Editor
             Check(CareerCatalog.Find("knight") != null && CareerCatalog.Find("berserker") != null, "starter career assets exist");
             Check(Fresh().run.job == Job.Adventurer && Fresh().run.promotion == 0, "every new run starts as adventurer");
             var gated = Fresh();
-            Check(!gated.ChooseJob(Job.Mage), "cannot choose class before level 20");
+            Check(!gated.ChooseJob(Job.Warrior), "cannot choose class before level 20");
             var invalidJobSave = Fresh(); invalidJobSave.run.job = Job.Warrior;
             Check(!Fresh().Restore(invalidJobSave.run), "unpromoted specialized class save is rejected");
             gated.run.level = 20; gated.run.state = RunState.Promotion;
             Check(!gated.Promote() && !gated.Promote("knight") && !gated.ChooseJob(Job.Adventurer) && !gated.ChooseJob((Job)99), "first promotion requires a valid specialized class");
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < JobData.AvailableJobs.Length; i++)
             {
                 var first = Fresh(); first.run.level = 20; first.run.state = RunState.Promotion;
                 int oldSkill = first.run.skillLevel;
@@ -47,7 +47,8 @@ namespace Ragna.Editor
             Check(!m.DrinkPotion() && m.run.potions == 4, "potion cooldown prevents repeats");
             Check(m.Guard() && !m.Guard(), "guard cooldown prevents repeats");
             m.run.enemies.Clear(); m.run.spawned = m.FloorPopulation;
-            m.run.enemies.Add(new EnemyState { id = 99, hp = 99999, maxHp = 99999, x = RunModel.MeleeX, y = -2, attackTimer = .01f });
+            m.run.enemies.Add(new EnemyState { id = 99, hp = 99999, maxHp = 99999, x = m.run.heroX + 1, y = m.run.heroY, attackTimer = .01f });
+            m.run.turnSide = TurnSide.Enemy; m.run.enemyActorId = 99; m.run.playerTurns = 1; m.run.turnTimer = .01f;
             m.run.attackTimer = m.run.skillTimer = 100; hp = m.run.hp; m.Tick(.05f);
             Check(hp - m.run.hp > 0 && hp - m.run.hp < 5, "guard reduces incoming damage");
             m = Fresh();
@@ -56,13 +57,14 @@ namespace Ragna.Editor
                 m.run.level = target; m.Tick(.05f);
                 Check(m.run.state == RunState.Promotion, "promotion gate " + target);
                 Check(target == 20 ? m.ChooseJob(Job.Warrior) : m.Promote(target == 60 ? "knight" : null), "promotion applies " + target);
+                Check(m.run.state == RunState.Preparation && m.BeginCombat(), "promotion opens preparation " + target);
             }
             Check(m.run.promotion == 3 && m.CanRebirth, "third promotion unlocks rebirth");
             var meta = m.meta; Check(m.Rebirth(), "rebirth accepted");
             Check(meta.passives[0] == 1 && meta.rebirths == 1 && m.run == null, "passive retained and run cleared");
             m.Start(); Check(m.run.level == 1 && m.run.job == Job.Adventurer && meta.passives[0] == 1, "rebirth restarts as adventurer with inherited passive");
-            m.run.job = Job.Archer; m.run.level = 100; m.run.promotion = 3; meta.passives[(int)Job.Archer] = 5;
-            Check(!m.CanRebirth && !m.Rebirth(), "passive rank cap enforced");
+            m.run.job = Job.Warrior; m.run.level = 100; m.run.promotion = 3; meta.passives[(int)Job.Warrior] = 5;
+            Check(m.CanRebirth && m.Rebirth() && meta.passives[(int)Job.Warrior] == 5 && meta.rebirths == 2, "capped passive still allows permanent slot inheritance");
             var knight = Fresh(); knight.run.level = 20; knight.run.state = RunState.Promotion; knight.ChooseJob(Job.Warrior);
             knight.run.level = 60; knight.run.state = RunState.Promotion;
             Check(!knight.Promote() && !knight.Promote("invalid"), "career choice is required and validated");
@@ -91,31 +93,30 @@ namespace Ragna.Editor
             var side = Fresh(); side.run.attackTimer = side.run.skillTimer = 100;
             side.Tick(.05f); var approaching = side.run.enemies[0];
             float startX = approaching.x, startY = approaching.y; side.Tick(.5f);
-            Check(approaching.x < startX && approaching.y == startY, "enemies approach horizontally on a fixed lane");
+            Check(approaching.x < startX && approaching.y != startY, "enemies approach in horizontal and ground depth axes");
             side.run.enemies.Clear();
             side.run.enemies.Add(new EnemyState { id = 1, hp = 10, maxHp = 10, x = 3, y = -3 });
             side.run.enemies.Add(new EnemyState { id = 2, hp = 10, maxHp = 10, x = 0, y = -1 });
             Check(side.Nearest().id == 2, "target selection follows horizontal distance");
-            Check(!RunModel.CanEnemyAttack(new EnemyState { x = 4, y = -9 }) &&
-                RunModel.CanEnemyAttack(new EnemyState { x = RunModel.MeleeX, y = 5 }), "melee range uses horizontal axis");
+            Check(!side.InHuntingRange(new EnemyState { hp = 10, x = side.run.heroX + 1, y = side.run.heroY + 1 }), "melee requires depth alignment");
             var old = Fresh(); old.run.enemies.Add(new EnemyState { id = 8, hp = 10, maxHp = 10, x = 1.5f, y = 4 });
             string legacy = JsonUtility.ToJson(new SaveEnvelope { version = 2, meta = old.meta, run = old.run, hasRun = true });
             var migrated = SaveStore.Parse(legacy);
-            Check(migrated.version == 4 && Mathf.Abs(migrated.run.enemies[0].x - 3.35f) < .001f &&
-                Mathf.Abs(migrated.run.enemies[0].y + 1.95f) < .001f, "vertical save migrates to horizontal coordinates");
+            Check(migrated.version == 7 && Mathf.Abs(migrated.run.enemies[0].x - 3.35f) < .001f &&
+                Mathf.Abs(migrated.run.enemies[0].y + 2.60f) < .001f, "vertical save migrates to horizontal coordinates");
             var migratedAgain = SaveStore.Parse(JsonUtility.ToJson(migrated));
             Check(migratedAgain.run.enemies[0].x == migrated.run.enemies[0].x, "horizontal saves are not migrated twice");
-            var legacyClass = Fresh(); legacyClass.run.job = Job.Mage; legacyClass.run.level = 10; legacyClass.meta.passives[0] = 2;
+            var legacyClass = Fresh(); legacyClass.run.job = Job.Warrior; legacyClass.run.level = 10; legacyClass.meta.passives[0] = 2;
             var converted = SaveStore.Parse(JsonUtility.ToJson(new SaveEnvelope { version = 3, meta = legacyClass.meta, run = legacyClass.run, hasRun = true }));
             Check(converted.run.job == Job.Adventurer && converted.run.level == 10 && converted.meta.passives[0] == 2, "legacy early class becomes adventurer without losing progress");
             legacyClass.run.level = 30;
             converted = SaveStore.Parse(JsonUtility.ToJson(new SaveEnvelope { version = 3, meta = legacyClass.meta, run = legacyClass.run, hasRun = true }));
-            Check(converted.run.job == Job.Mage && converted.run.promotion == 1, "legacy level 20+ chosen class is preserved");
+            Check(converted.run.job == Job.Warrior && converted.run.promotion == 1, "legacy level 20+ chosen class is preserved");
             legacyClass.run.level = 20; legacyClass.run.state = RunState.Promotion;
             converted = SaveStore.Parse(JsonUtility.ToJson(new SaveEnvelope { version = 3, meta = legacyClass.meta, run = legacyClass.run, hasRun = true }));
-            Check(converted.run.state == RunState.Fighting && converted.run.promotion == 1, "legacy level 20 promotion cannot become a stuck level 60 modal");
-            var inherited = Fresh(); float normalHp = inherited.MaxHp; inherited.meta.passives[(int)Job.Fighter] = 2;
-            Check(inherited.MaxHp > normalHp, "inherited passives work during adventurer phase");
+            Check(converted.run.state == RunState.Preparation && converted.run.promotion == 1, "legacy level 20 promotion returns to valid preparation");
+            var inherited = Fresh(); inherited.meta.passives[0] = 2; inherited.meta.Sanitize();
+            Check(inherited.meta.passives.Length == 1 && inherited.meta.passives[0] == 2, "only warrior passive is retained");
             m = Fresh(); m.run.floor = 2; m.run.floorKills = m.FloorPopulation; m.run.spawned = m.FloorPopulation; m.Tick(.05f);
             Check(m.run.state == RunState.Blessing && m.run.offers.Length == 3, "floor offers three blessings");
             Check(m.run.offers[0] != m.run.offers[1] && m.run.offers[0] != m.run.offers[2] && m.run.offers[1] != m.run.offers[2], "offers unique");
@@ -144,9 +145,20 @@ namespace Ragna.Editor
         static RunModel Simulate(Job job, bool intervention, string firstCareer = "knight")
         {
             var m = Fresh();
+            m.PrepareCombat();
             for (int i = 0; i < 100000; i++)
             {
                 if (m.run.state == RunState.Dead || m.run.state == RunState.Victory) break;
+                if (m.run.state == RunState.Preparation)
+                {
+                    string action = m.SlotCapacity >= 2 && m.run.skillLevel >= 4 ? "skill2" : "skill1";
+                    for (int slot = 0; slot < m.SlotCapacity; slot++)
+                    {
+                        if (action == "skill2" && slot + 2 > m.SlotCapacity) action = "skill1";
+                        if (m.SetPlanAction(slot, action)) slot += CombatActionCatalog.Find(action).slotCost - 1;
+                    }
+                    m.BeginCombat();
+                }
                 if (m.run.state == RunState.Promotion)
                 {
                     if (m.run.job == Job.Adventurer) m.ChooseJob(job);
@@ -173,7 +185,7 @@ namespace Ragna.Editor
                 if (intervention)
                 {
                     if (m.run.hp < m.MaxHp * .55f) m.DrinkPotion();
-                    if (m.run.enemies.Exists(e => e.attackTimer < .45f && RunModel.CanEnemyAttack(e))) m.Guard();
+                    if (m.run.enemies.Exists(e => e.attackTimer < .45f && m.InHuntingRange(e))) m.Guard();
                 }
                 m.Tick(.1f);
             }

@@ -1,0 +1,1 @@
+PASS: 32 warrior-only route checks. Retired job IDs rejected; v1-v6 migration retains progress and only Warrior passive.

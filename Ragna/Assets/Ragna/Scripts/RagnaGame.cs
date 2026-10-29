@@ -19,23 +19,55 @@ namespace Ragna
         AudioClip attackTone, skillTone, healTone, alertTone;
         bool inCamp;
         bool reviewPreview;
+        int selectedSlot, preparationPage;
+        TitleScreen titleScreen;
+        bool inTitle;
+        RunSnapshot pendingRun;
         void Start()
         {
             Application.targetFrameRate = 60; Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            Screen.autorotateToPortrait = Screen.autorotateToPortraitUpsideDown = false;
+            Screen.orientation = ScreenOrientation.LandscapeLeft;
+            Camera.main.orthographicSize = LandscapeDisplaySettings.Current.cameraHalfHeight;
+            var pixelCamera = Camera.main.GetComponent<UnityEngine.Rendering.Universal.PixelPerfectCamera>();
+            pixelCamera.refResolutionY = Mathf.RoundToInt(LandscapeDisplaySettings.Current.cameraHalfHeight * pixelCamera.assetsPPU * 2);
+            pixelCamera.refResolutionX = Mathf.RoundToInt(pixelCamera.refResolutionY * 16f / 9);
             CareerCatalog.Reload();
             var loaded = SaveStore.Load(); Model = new RunModel(loaded.meta);
-            ui = new GameUI(koreanFont, Drink, Guard, PauseMenu, GrowthMenu);
+            ui = new GameUI(koreanFont, Drink, Guard, PauseMenu, GrowthMenu, PreparationMenu);
             view = new BattleView(Camera.main, ui, spriteMaterial);
             audioSource = gameObject.AddComponent<AudioSource>(); audioSource.playOnAwake = false; audioSource.volume = .18f;
             attackTone = Tone(330, .045f); skillTone = Tone(660, .15f); healTone = Tone(880, .16f); alertTone = Tone(130, .15f);
-            if (loaded.run != null && Model.Restore(loaded.run))
+            pendingRun = loaded.run;
+            ShowTitle();
+            if (SaveStore.LastError != null) Debug.LogWarning(SaveStore.LastError);
+        }
+        void ShowTitle()
+        {
+            if (titleScreen != null) { titleScreen.gameObject.SetActive(false); Destroy(titleScreen.gameObject); }
+            var prefab = Resources.Load<GameObject>("Title/TitleScreen");
+            if (prefab == null) throw new InvalidOperationException("Run ragna_title_setup to create the title screen prefab.");
+            titleScreen = Instantiate(prefab).GetComponent<TitleScreen>(); titleScreen.Bind(EnterFromTitle);
+            inTitle = true; Model.paused = true;
+            ui.root.gameObject.SetActive(false); view.SetVisible(false);
+        }
+        void HideTitle()
+        {
+            if (titleScreen != null) { titleScreen.gameObject.SetActive(false); Destroy(titleScreen.gameObject); titleScreen = null; }
+            inTitle = false; ui.root.gameObject.SetActive(true);
+        }
+        void EnterFromTitle()
+        {
+            if (!inTitle) return;
+            HideTitle();
+            var resume = pendingRun; pendingRun = null;
+            if (resume != null && Model.Restore(resume))
             {
-                inCamp = false; view.Update(Model, 0);
+                inCamp = false; shownState = null; view.SetVisible(true); view.Update(Model, 0);
                 if (Model.run.state == RunState.Fighting) PauseMenu();
                 else { Model.paused = false; SyncState(); }
             }
-            else Camp();
-            if (SaveStore.LastError != null) Debug.LogWarning(SaveStore.LastError);
+            else BeginRun();
         }
         AudioClip Tone(float hz, float duration)
         {
@@ -45,7 +77,7 @@ namespace Ragna
         }
         void Update()
         {
-            if (Model == null) return;
+            if (Model == null || inTitle) return;
             float dt = Time.unscaledDeltaTime;
             messageTime = Mathf.Max(0, messageTime - dt); soundTimer = Mathf.Max(0, soundTimer - dt);
             if (Keyboard.current != null)
@@ -87,10 +119,11 @@ namespace Ragna
         void Toast(string text) { message = text; messageTime = 2.2f; }
         public void BeginRun(uint seed = 0)
         {
+            HideTitle(); pendingRun = null;
             Model.Start(seed == 0 ? (uint)DateTime.UtcNow.Ticks : seed);
             inCamp = false; shownState = null; view.Reset(); view.SetVisible(true); ui.Close();
-            Save(); SyncState();
-            if (!Model.meta.tutorialSeen) Tutorial();
+            Save();
+            if (!Model.meta.tutorialSeen) Tutorial(); else SyncState();
         }
         void Camp()
         {
@@ -101,8 +134,8 @@ namespace Ragna
         {
             Model.paused = true;
             var p = ui.Open("생존의 첫걸음", "공격은 자동으로, 생존은 직접");
-            ui.Text(p, "적 아래 붉은 원이 깜박이면 공격 직전입니다.\n\n물약: HP 회복 · 5초 대기\n회피 보호막: 1.6초 동안 피해 85% 감소\n막기에 성공하면 즉시 반격 스킬 발동\n보호막 재사용: 8초\n\n물약은 한정되어 있습니다.\n5층마다 보스를 이기면 3개를 보충합니다.\n\n강화 선택과 앱을 떠난 동안 전투 정지", .07f, .22f, .93f, .73f, 24);
-            ui.Button(p, "알겠어요 · 전투 시작", .07f, .07f, .93f, .18f, () => { Model.meta.tutorialSeen = true; Model.paused = false; ui.Close(); Save(); }, 27);
+            ui.Text(p, "전투 준비에서 공격 슬롯을 배치하세요.\n몬스터에게 자동으로 접근하여\n슬롯 공격을 순서대로 반복합니다.\n바닥 위아래 이동 가능 · 점프 없음\n\n적의 붉은 원이 깜박이면 공격 직전입니다.\n물약: HP 회복 · 5초 대기\n보호막: 1.6초 동안 피해 85% 감소\n막기 성공: 다음 공격 피해 +25%\n보호막 재사용: 8초\n\n첫 전직 슬롯 +1 · 전승마다 영구 슬롯 +1", .07f, .22f, .93f, .73f, 24);
+            ui.Button(p, "알겠어요 · 전투 준비", .07f, .07f, .93f, .18f, () => { Model.meta.tutorialSeen = true; Model.paused = false; shownState = null; Save(); SyncState(); }, 27);
         }
         void SyncState()
         {
@@ -112,6 +145,7 @@ namespace Ragna
             switch (Model.run.state)
             {
                 case RunState.Fighting: ui.Close(); break;
+                case RunState.Preparation: ShowPreparation(); break;
                 case RunState.Blessing:
                     ui.Blessings(Model, index => { if (Model.ChooseBlessing(index)) { Save(); SyncState(); } }); break;
                 case RunState.Promotion:
@@ -121,14 +155,29 @@ namespace Ragna
             }
             Save();
         }
+        void PreparationMenu()
+        {
+            if (inCamp || Model?.run == null || !Model.PrepareCombat()) return;
+            shownState = RunState.Preparation; Save(); ShowPreparation();
+        }
+        void ShowPreparation()
+        {
+            selectedSlot = Mathf.Clamp(selectedSlot, 0, Model.SlotCapacity - 1);
+            preparationPage = selectedSlot / 8;
+            ui.Preparation(Model, selectedSlot, preparationPage,
+                slot => { selectedSlot = slot; ShowPreparation(); },
+                id => { if (Model.SetPlanAction(selectedSlot, id)) { Save(); ShowPreparation(); } },
+                () => { if (Model.BeginCombat()) { Save(); shownState = null; SyncState(); } },
+                direction => { selectedSlot = Mathf.Clamp((preparationPage + direction) * 8, 0, Model.SlotCapacity - 1); ShowPreparation(); });
+        }
         void Result(bool won)
         {
             Model.paused = false;
             var r = Model.run;
             var p = ui.Open(won ? "월식을 넘어" : "이번 여정의 끝", won ? "30층 정복 · 당신의 성장이 길을 열었습니다" : "쓰러져도, 다음 여정은 계속됩니다");
             ui.Text(p, Model.JobName + "  LV." + r.level + "\n" + r.floor + "층 · 처치 " + r.kills + "\n스킬 LV." + r.skillLevel + " · 진화 " + (Model.SkillTier + 1) + "단계\n" + TimeSpan.FromSeconds(r.time).ToString(@"mm\:ss"), .06f, .42f, .94f, .72f, 30);
-            ui.Text(p, won ? "다른 직업과 강화 조합으로 다시 도전하세요." : "적의 공격 직전에 보호막을 쓰고,\nHP가 낮아지기 전에 물약을 준비하세요.", .07f, .28f, .93f, .40f, 23);
-            if (Model.CanRebirth) ui.Button(p, "환생 · " + JobData.Passives[(int)r.job] + " 계승", .07f, .17f, .93f, .26f, RebirthMenu, 25);
+            ui.Text(p, won ? "기사·광전사와 새로운 강화 조합으로 다시 도전하세요." : "적의 공격 직전에 보호막을 쓰고,\nHP가 낮아지기 전에 물약을 준비하세요.", .07f, .28f, .93f, .40f, 23);
+            if (Model.CanRebirth) ui.Button(p, "환생 · " + JobData.Passives[JobData.PassiveIndex(r.job)] + " 계승", .07f, .17f, .93f, .26f, RebirthMenu, 25);
             ui.Button(p, "캠프로 돌아가기", .07f, .05f, .93f, .15f, EndRun, 28);
         }
         void EndRun() { Model.run = null; Model.paused = false; view.Reset(); Save(); Camp(); }
@@ -179,8 +228,8 @@ namespace Ragna
             Model.paused = true;
             Job job = Model.run.job;
             var p = ui.Open("새로운 시작", "현재 도전을 마치고 영구적인 힘을 얻습니다");
-            ui.Text(p, JobData.Passives[(int)job] + "  " + (Model.meta.passives[(int)job] + 1) + "/5\n\n" + JobData.PassiveDescriptions[(int)job] +
-                "\n\n모든 직업에서 계승 효과 적용\n환생당 기본 HP +2% · 공격력 +2.5%\n다음 도전은 LV.1부터 시작", .08f, .30f, .92f, .72f, 27);
+            ui.Text(p, JobData.Passives[JobData.PassiveIndex(job)] + "  " + Mathf.Min(5, Model.meta.passives[JobData.PassiveIndex(job)] + 1) + "/5\n\n" + JobData.PassiveDescriptions[JobData.PassiveIndex(job)] +
+                "\n\n모험가와 검사 계열에 계승 효과 적용\n전승 시 영구 공격 슬롯 +1\n환생당 기본 HP +2% · 공격력 +2.5%\n다음 도전은 모험가 LV.1부터 시작", .08f, .30f, .92f, .72f, 25);
             ui.Button(p, "패시브 계승 · 환생 확정", .07f, .16f, .93f, .28f, () => { if (Model.Rebirth()) { view.Reset(); Save(); Camp(); } }, 27);
             ui.Button(p, "돌아가기", .07f, .05f, .93f, .14f, () => { if (Model.run.state == RunState.Fighting) GrowthMenu(); else Result(Model.run.state == RunState.Victory); }, 25);
         }
@@ -190,16 +239,95 @@ namespace Ragna
             ui.Button(p, "효과음  " + (Model.meta.sound ? "켜짐" : "꺼짐"), .07f, .65f, .49f, .75f, () => { Model.meta.sound = !Model.meta.sound; Save(); Settings(); }, 24);
             ui.Button(p, "진동  " + (Model.meta.vibration ? "켜짐" : "꺼짐"), .52f, .65f, .93f, .75f, () => { Model.meta.vibration = !Model.meta.vibration; Save(); Settings(); }, 24);
             string text = "";
-            for (int i = 0; i < 7; i++) text += JobData.Names[i] + " · " + JobData.Passives[i] + "  " + Model.meta.passives[i] + "/5\n<size=18>" + JobData.PassiveDescriptions[i] + "</size>\n\n";
+            for (int i = 0; i < JobData.AvailableJobs.Length; i++) text += JobData.Names[(int)JobData.AvailableJobs[i]] + " · " + JobData.Passives[i] + "  " + Model.meta.passives[i] + "/5\n<size=18>" + JobData.PassiveDescriptions[i] + "</size>\n\n";
             ui.Text(p, text, .07f, .13f, .93f, .62f, 22, null, TextAlignmentOptions.TopLeft);
             ui.Button(p, "돌아가기", .07f, .025f, .93f, .11f, () => { if (inCamp) Camp(); else PauseMenu(); }, 27);
         }
         void Save()
         {
+            if (inTitle) return; // Opening or closing the title must never clear a pending saved run.
             if (reviewPreview) return;
             if (Model != null && !SaveStore.Save(Model)) Toast("저장 공간을 확인해 주세요");
         }
 #if UNITY_EDITOR
+        public string ReviewTitleUI()
+        {
+            reviewPreview = true;
+            Model = new RunModel(new MetaProgress { tutorialSeen = true }); pendingRun = null;
+            // Raycast the already rendered launch screen; freshly instantiated graphics have no depth until rendered.
+            if (!inTitle || titleScreen == null) ShowTitle();
+            int checks = 0;
+            void Check(bool value, string label) { if (!value) throw new InvalidOperationException(label); checks++; }
+            Check(inTitle && !ui.root.gameObject.activeSelf, "Title covers gameplay HUD");
+            Check(titleScreen.GetComponentsInChildren<UnityEngine.UI.Button>().Length == 4, "Four title buttons");
+            Canvas.ForceUpdateCanvases();
+            foreach (var button in new[] { titleScreen.gameStart, titleScreen.settings, titleScreen.credits, titleScreen.quit })
+            {
+                var rect = (RectTransform)button.transform;
+                var pointer = new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current)
+                    { position = RectTransformUtility.WorldToScreenPoint(null, rect.TransformPoint(rect.rect.center)) };
+                var hits = new System.Collections.Generic.List<UnityEngine.EventSystems.RaycastResult>();
+                UnityEngine.EventSystems.EventSystem.current.RaycastAll(pointer, hits);
+                Check(hits.Count > 0 && hits[0].gameObject == button.gameObject, "Button receives touch: " + button.name);
+            }
+            foreach (var button in new[] { titleScreen.settings, titleScreen.credits, titleScreen.quit })
+            { button.onClick.Invoke(); Check(inTitle && Model.run == null, "Placeholder does nothing: " + button.name); }
+            titleScreen.gameStart.onClick.Invoke();
+            Check(!inTitle && Model.run.job == Job.Adventurer && Model.run.state == RunState.Preparation, "START opens a new adventure");
+            Check(ui.root.gameObject.activeSelf, "START restores gameplay HUD");
+            var previous = new RunModel(new MetaProgress { tutorialSeen = true }); previous.Start(731); previous.run.level = 5;
+            Model = new RunModel(previous.meta); pendingRun = previous.run; ShowTitle();
+            Check(Model.run == null && pendingRun.level == 5, "Saved progress waits behind title");
+            titleScreen.gameStart.onClick.Invoke();
+            Check(!inTitle && Model.run.level == 5 && Model.run.state == RunState.Preparation, "START resumes saved progress");
+            Model = new RunModel(new MetaProgress { tutorialSeen = true }); pendingRun = null; ShowTitle();
+            return "PASS: " + checks + " title UI checks. Four buttons, START/new/resume, placeholders, HUD isolation. Save untouched.";
+        }
+        public string PreviewHunting(float seconds)
+        {
+            PreviewGrowth(1, (int)Job.Warrior);
+            var r = Model.run;
+            r.enemies.Clear(); r.spawned = Model.FloorPopulation;
+            r.enemies.Add(new EnemyState { id = 1, kind = 0, hp = 10000, maxHp = 10000, x = 3.7f, y = -1.9f, attackTimer = 3 });
+            r.enemies.Add(new EnemyState { id = 2, kind = 1, hp = 10000, maxHp = 10000, x = 4.5f, y = -3.4f, attackTimer = 3 });
+            r.nextId = 2; r.turnTimer = .35f; Model.ResizePlan();
+            Model.paused = false;
+            for (float t = 0; t < seconds; t += .05f)
+            {
+                Model.Tick(.05f);
+                foreach (var ev in Model.events) view.Event(ev, Model);
+                view.Update(Model, .05f);
+            }
+            Model.paused = true; ui.Update(Model, "자동 추적 · 점프 없음", 10);
+            return "Hero ground=" + r.heroX + "," + r.heroY + "; enemies=" + r.enemies.Count;
+        }
+        public string ReviewTurnUI()
+        {
+            HideTitle();
+            int checks = 0;
+            void Require(bool condition) { if (!condition) throw new InvalidOperationException("Preparation UI check failed."); checks++; }
+            void Click(string prefix)
+            {
+                foreach (var button in ui.root.GetComponentsInChildren<UnityEngine.UI.Button>())
+                    if (button.GetComponentInChildren<TMP_Text>().text.StartsWith(prefix, StringComparison.Ordinal))
+                    { Require(button.interactable); button.onClick.Invoke(); return; }
+                throw new InvalidOperationException("Preparation button missing: " + prefix);
+            }
+            reviewPreview = true;
+            Model = new RunModel(new MetaProgress { tutorialSeen = true, rebirths = 1 }); Model.Start(731);
+            Model.run.job = Job.Warrior; Model.run.level = 20; Model.run.promotion = 1; Model.run.skillLevel = 12;
+            Model.ResizePlan(); Model.run.hp = Model.MaxHp;
+            inCamp = false; shownState = null; selectedSlot = 0; view.Reset(); view.SetVisible(true); view.Update(Model, 0); SyncState();
+            Require(Model.SlotCapacity == 3 && Model.run.state == RunState.Preparation);
+            Click("월광 참격 · 상급 스킬"); Require(Model.run.attackPlan[1] == "" && Model.run.attackPlan[2] == "");
+            Click("2번"); Click("평타"); Require(Model.run.attackPlan[0] == "basic" && Model.run.attackPlan[2] == "basic");
+            Click("3번"); Click("월광 참격 · 기본 스킬"); Require(Model.run.attackPlan[2] == "skill1");
+            Click("설정 완료"); Require(Model.IsActive && ui.modal == null);
+            Model.Tick(.5f); var active = JsonUtility.ToJson(Model.run);
+            PreparationMenu(); Require(Model.run.state == RunState.Preparation); Model.Tick(.5f);
+            Require(Model.run.time == JsonUtility.FromJson<RunSnapshot>(active).time);
+            return "PASS: " + checks + " preparation UI checks; slot selection, reservations, replacement, full-plan start and freeze. Save untouched.";
+        }
         public void PreviewBackground(int floor)
         {
             PreviewGrowth(0, (int)Job.Adventurer);
@@ -209,11 +337,13 @@ namespace Ragna
         // Review fixtures never overwrite the player's save and are excluded from builds.
         public void PreviewGrowth(int tier, int job, string careerId = "knight")
         {
+            HideTitle();
             reviewPreview = true;
             Model = new RunModel(new MetaProgress { tutorialSeen = true });
             Model.Start(123);
-            Model.run.job = (Job)Mathf.Clamp(job, 0, 7); // Isolated art fixture, not a new-run entry point.
+            Model.run.job = Enum.IsDefined(typeof(Job), job) ? (Job)job : Job.Adventurer; // Isolated art fixture, not a new-run entry point.
             var r = Model.run;
+            r.state = RunState.Fighting;
             r.promotion = Mathf.Clamp(tier, 0, 3);
             if (job == 0 && tier >= 2) r.careerId = careerId;
             r.level = new[] { 1, 20, 60, 100 }[r.promotion];
@@ -247,7 +377,8 @@ namespace Ragna
             Camp(); Click("모험가로 도전 시작");
             Require(Model.run.job == Job.Adventurer && Model.run.level == 1, "single adventurer start");
             Require(Model.paused && ui.modal != null, "tutorial pauses first run");
-            Click("알겠어요"); Require(Model.IsActive && ui.modal == null, "tutorial resumes combat");
+            Click("알겠어요"); Require(Model.run.state == RunState.Preparation && !Model.IsActive, "tutorial opens preparation");
+            Click("설정 완료"); Require(Model.IsActive && ui.modal == null, "preparation starts combat");
             Model.run.hp = Model.MaxHp * .2f; ui.Update(Model, "", 0);
             Click("물약"); Require(Model.run.hp > Model.MaxHp * .2f && Model.run.potions == 4, "potion button heals");
             Click("정지"); Require(Model.paused && ui.modal != null, "pause button");
@@ -255,14 +386,18 @@ namespace Ragna
             Model.run.level = 20; Model.Tick(.05f); SyncState();
             Require(Model.run.state == RunState.Promotion, "promotion modal");
             Click("검사"); Require(Model.run.promotion == 1 && Model.run.job == Job.Warrior && Model.run.careerId == "", "first class choice button");
+            Require(Model.SlotCapacity == 2 && Model.run.state == RunState.Preparation, "first promotion grants one slot and opens preparation");
+            Click("설정 완료");
             Model.run.level = 60; Model.Tick(.05f); SyncState();
             Click("기사"); Require(Model.run.promotion == 2 && Model.run.careerId == "knight", "level 60 career choice button");
+            Require(Model.SlotCapacity == 2, "later promotion does not grant extra slot"); Click("설정 완료");
             Model.run.state = RunState.Blessing;
             Model.run.offers = new[] { Blessing.Power, Blessing.Skill, Blessing.Supplies }; SyncState();
             Click("날카로운 의지"); Require(Model.run.floor == 2 && Model.run.upgrades[0] == 1, "blessing card");
             Model.run.level = 100; Model.run.promotion = 3; GrowthMenu();
             Click("환생하기"); Click("패시브 계승");
             Require(Model.run == null && Model.meta.rebirths == 1 && Model.meta.passives[0] == 1 && inCamp, "rebirth and camp");
+            Require(Model.SlotCapacity == 2, "rebirth slot remains at camp");
             Model = new RunModel(new MetaProgress { tutorialSeen = true }); BeginRun(731);
             Model.run.hp = 0; Model.run.state = RunState.Dead; SyncState();
             Require(ui.modal != null, "death results modal"); Click("캠프로 돌아가기");

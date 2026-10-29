@@ -9,7 +9,7 @@ namespace Ragna.Editor
 {
     public static class VisualChecks
     {
-        [CliCommand("ragna_visual_checks", "Check animated pixel poses and render all 28 job/skill stages", MainThreadRequired = true)]
+        [CliCommand("ragna_visual_checks", "Check animated pixel poses and render Warrior skill stages", MainThreadRequired = true)]
         public static string Run()
         {
             if (!EditorApplication.isPlaying) throw new InvalidOperationException("Enter Play mode first.");
@@ -59,7 +59,7 @@ namespace Ragna.Editor
             var game = UnityEngine.Object.FindFirstObjectByType<RagnaGame>();
             var camera = Camera.main;
             var oldTarget = camera.targetTexture; var oldActive = RenderTexture.active;
-            var target = new RenderTexture(480, 852, 24);
+            var target = new RenderTexture(960, 540, 24);
             var html = new StringBuilder("<!doctype html><meta charset='utf-8'><title>Ragna skill growth</title><style>body{background:#0e1522;color:#eee;font:18px sans-serif;margin:24px}section{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:1200px}img{width:100%;image-rendering:pixelated}figure{margin:0}figcaption{padding:8px}</style><h1>직업별 스킬 성장</h1><p>실제 Unity 카메라 렌더 · 왼쪽부터 스킬 LV.1 / 4 / 8 / 12. 저장과 분리한 미리보기.</p>");
             try
             {
@@ -71,8 +71,8 @@ namespace Ragna.Editor
                     {
                         game.PreviewGrowth(tier, (int)job);
                         camera.targetTexture = target; camera.Render(); RenderTexture.active = target;
-                        var shot = new Texture2D(480, 420, TextureFormat.RGB24, false);
-                        shot.ReadPixels(new Rect(0, 245, 480, 420), 0, 0); shot.Apply();
+                        var shot = new Texture2D(960, 540, TextureFormat.RGB24, false);
+                        shot.ReadPixels(new Rect(0, 0, 960, 540), 0, 0); shot.Apply();
                         string filename = job + "-" + tier + ".png";
                         File.WriteAllBytes(Path.Combine(directory, filename), shot.EncodeToPNG());
                         UnityEngine.Object.DestroyImmediate(shot);
@@ -86,7 +86,7 @@ namespace Ragna.Editor
             }
             finally { camera.targetTexture = oldTarget; RenderTexture.active = oldActive; UnityEngine.Object.DestroyImmediate(target); }
             File.WriteAllText(Path.Combine(directory, "index.html"), html.ToString());
-            string result = "PASS: " + checks + " visual checks; 28 rendered skill stages. Pixel poses, cache reuse, distinct frame content and effect bounds verified.";
+            string result = "PASS: " + checks + " visual checks; 4 rendered Warrior skill stages. Pixel poses, cache reuse, distinct frame content and effect bounds verified.";
             File.WriteAllText("../Docs/VISUAL_CHECKS.txt", result); return result;
         }
         static int Hash(Sprite sprite)

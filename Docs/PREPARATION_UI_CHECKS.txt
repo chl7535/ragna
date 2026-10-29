@@ -1,0 +1,1 @@
+PASS: 13 preparation UI checks; slot selection, reservations, replacement, full-plan start and freeze. Save untouched.

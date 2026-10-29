@@ -1,0 +1,1 @@
+PASS: 14 landscape configuration and UI checks. Portrait disabled; editable HUD; Safe Area; 1920x1080 reference.

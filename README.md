@@ -1,12 +1,14 @@
 # Ragna
 
-세로 화면에서 좌→우로 전투하는 횡스크롤 모바일 도트 RPG. Android / iOS 공통 소스, 광고·결제 없음.
+가로 화면 전용으로 좌→우 전투를 하는 횡스크롤 모바일 도트 RPG. Android / iOS 공통 소스, 광고·결제 없음.
 
 사용자 제공 배경 6종을 5층 단위로 적용했습니다. `Docs/BackgroundGallery/index.html`에서 적용 화면을 확인할 수 있습니다.
 
 캐릭터 7개 동작 프레임과 직업별 4단계 스킬 연출을 적용했습니다.
-`Docs/SkillGallery/animations.html`과 `index.html`에서 움직임과 28개 성장 상태를 볼 수 있습니다.
+`Docs/SkillGallery/animations.html`과 `index.html`에서 움직임과 검사 성장 상태를 볼 수 있습니다.
 현재 APK/iOS 출력은 애니메이션 보강 전 버전입니다. 기기 검증은 최신 소스를 다시 빌드한 후 진행합니다.
+
+화면 기준은 1920×1080(16:9), 20:9 이상에서는 좌우 배경을 더 보여줍니다. 세로 화면은 지원하지 않습니다. [가로 화면 편집 안내](Docs/DISPLAY_LAYOUT.md).
 
 ## 프로젝트 열기
 
@@ -18,15 +20,19 @@ Unity 프로젝트 폴더는 `Ragna/`이며 Unity **6000.3.26f1 LTS**를 사용�
 
 게임 씬: `Assets/Ragna/Scenes/Ragna.unity`. Play를 눌러 모험가로 시작합니다. 20레벨에 첫 직업을 선택합니다.
 터치 또는 마우스로 물약과 회피 보호막을 사용합니다. PC에서는 Q: 물약, W: 보호막, Esc: 일시정지입니다.
-첫 실행에는 조작 안내가 나옵니다. 전투는 자동이고 앱을 떠나면 일시정지됩니다.
+첫 실행에는 조작 안내가 나옵니다. 전투 준비에서 공격을 배치하면 몬스터에게 자동으로 접근해 순서대로 반복 공격합니다. 바닥 위아래 이동이 가능하며 점프는 없습니다. 앱을 떠나면 일시정지됩니다.
+
+자동사냥 이동·사거리 설정: [AUTO_HUNTING.md](Docs/AUTO_HUNTING.md).
 
 ## 게임 구조
 
-- 시작 직업 모험가와 전직 직업 일곱 종류, 30층, 5층마다 보스, 층 클리어 시 세 개 중 하나를 고르는 무작위 강화.
-- 20레벨에 검사/궁수/법사/거너/격투가/성직자/도적 중 선택합니다. 검사는 60레벨에 기사/광전사로 전직하며 100레벨에 승급합니다. 다른 세부 분기는 추후 함께 결정합니다.
+- 공격 슬롯은 기본 1칸 + 20레벨 첫 전직 1칸 + 전승(환생) 횟수입니다. 전승 슬롯은 영구 유지하며 60·100레벨에는 추가하지 않습니다.
+- 평타와 1·2·3·6칸 스킬을 준비창에서 배치합니다. 여러 칸을 쓰는 스킬도 한 번에 발동합니다. [설정과 확장 방법](Docs/COMBAT_SLOTS.md).
+- 모험가 → 검사 → 기사/광전사 루트, 30층, 5층마다 보스, 층 클리어 시 세 개 중 하나를 고르는 무작위 강화.
+- 20레벨에 검사로 전직하고, 60레벨에 기사/광전사를 선택하며 100레벨에 승급합니다. 다른 직업은 제거했으며 이후 필요할 때 추가합니다.
 - 스킬 4·8·12레벨에 시각적 진화. 승급 시 장비와 오라 변화.
 - 100레벨 3차 승급 이후 환생해 현재 직업 패시브를 영구 계승(각 5단계).
-- 환생당 기본 HP +2%, 공격력 +2.5%. 다음 도전은 모험가로 시작하고 20레벨에 다른 직업을 선택할 수 있습니다.
+- 환생당 기본 HP +2%, 공격력 +2.5%. 다음 도전은 모험가로 시작하고 20레벨에 검사로 전직합니다.
 - 사망 시 현재 도전 종료. 영구 계승과 최고 기록 유지.
 
 `RunModel`은 전투와 성장, `RagnaGame`은 화면 흐름, `BattleView`는 도트와 이펙트,
@@ -41,9 +47,12 @@ Unity가 열리고 Pipeline이 준비되면 저장소 루트에서 실행합니�
 ```powershell
 .\Tools\unity.ps1 status --format json
 .\Tools\unity.ps1 command ragna_checks
+.\Tools\unity.ps1 command ragna_hunting_checks
+.\Tools\unity.ps1 command ragna_combat_setup
 .\Tools\unity.ps1 command ragna_setup
 .\Tools\unity.ps1 command editor_play
 .\Tools\unity.ps1 command ragna_ui_checks
+.\Tools\unity.ps1 command ragna_preparation_ui_checks
 ```
 
 `ragna_setup`은 생성된 게임 씬을 다시 만듭니다. 수동으로 편집한 씬을 보존하려면 먼저 다른 이름으로 저장하세요.

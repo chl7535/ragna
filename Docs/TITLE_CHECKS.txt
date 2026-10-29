@@ -1,0 +1,1 @@
+PASS: 13 title UI checks. Four buttons, START/new/resume, placeholders, HUD isolation. Save untouched.

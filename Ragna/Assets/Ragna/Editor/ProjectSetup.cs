@@ -68,9 +68,10 @@ namespace Ragna.Editor
         }
         [MenuItem("Ragna/Refresh Korean font")]
         public static void BakeFontMenu() => BakeFont();
-        [CliCommand("ragna_capture", "Capture the complete portrait Game view including overlay UI", MainThreadRequired = true)]
-        public static string Capture([CliArg("output", "PNG output path relative to project root")] string output = "../Docs/Screenshots/game.png")
+        [CliCommand("ragna_capture", "Capture landscape Game view including overlay UI", MainThreadRequired = true)]
+        public static string Capture([CliArg("output", "PNG output path relative to project root")] string output = "../Docs/Screenshots/game.png", [CliArg("width", "Landscape width")] int width = 1920, [CliArg("height", "Landscape height")] int height = 1080)
         {
+            if (width <= height || height < 1) throw new ArgumentException("Only landscape capture sizes are supported.");
             var assembly = typeof(EditorWindow).Assembly;
             var gameViewType = assembly.GetType("UnityEditor.GameView");
             var window = EditorWindow.GetWindow(gameViewType);
@@ -82,12 +83,13 @@ namespace Ragna.Editor
                 EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ? "iOS" : "Standalone";
             var group = sizesType.GetMethod("GetGroup").Invoke(sizes, new[] { Enum.Parse(groupEnum, groupName) });
             var labels = (string[])group.GetType().GetMethod("GetDisplayTexts").Invoke(group, null);
-            int index = Array.FindIndex(labels, label => label.StartsWith("Ragna Portrait", StringComparison.Ordinal));
+            string sizeName = "Ragna Landscape " + width + "x" + height;
+            int index = Array.FindIndex(labels, label => label.StartsWith(sizeName, StringComparison.Ordinal));
             if (index < 0)
             {
                 var sizeType = assembly.GetType("UnityEditor.GameViewSize");
                 var enumType = assembly.GetType("UnityEditor.GameViewSizeType");
-                var fixedSize = Activator.CreateInstance(sizeType, new object[] { Enum.Parse(enumType, "FixedResolution"), 720, 1280, "Ragna Portrait" });
+                var fixedSize = Activator.CreateInstance(sizeType, new object[] { Enum.Parse(enumType, "FixedResolution"), width, height, sizeName });
                 group.GetType().GetMethod("AddCustomSize").Invoke(group, new[] { fixedSize });
                 index = (int)group.GetType().GetMethod("GetTotalCount").Invoke(group, null) - 1;
             }
@@ -106,7 +108,7 @@ namespace Ragna.Editor
             return result;
         }
         [CliCommand("ragna_preview", "Show an isolated growth fixture without changing saved progress", MainThreadRequired = true)]
-        public static string Preview([CliArg("tier", "Growth stage 0 to 3")] int tier = 0, [CliArg("job", "Job index 0 to 6")] int job = 0,
+        public static string Preview([CliArg("tier", "Growth stage 0 to 3")] int tier = 0, [CliArg("job", "Job ID: Warrior 0, Adventurer 7")] int job = 0,
             [CliArg("career", "Career ID for warrior promotion previews")] string career = "knight")
         {
             if (!EditorApplication.isPlaying) throw new InvalidOperationException("Enter Play mode first.");
@@ -149,11 +151,11 @@ namespace Ragna.Editor
             var cameraGo = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener), typeof(UniversalAdditionalCameraData));
             cameraGo.tag = "MainCamera"; cameraGo.transform.position = new Vector3(0, 0, -10);
             var camera = cameraGo.GetComponent<Camera>(); camera.orthographic = true;
-            camera.orthographicSize = 426f / 32; camera.backgroundColor = new Color32(12, 19, 31, 255);
+            camera.orthographicSize = 180f / 32; camera.backgroundColor = new Color32(12, 19, 31, 255);
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.allowHDR = camera.allowMSAA = camera.allowDynamicResolution = false;
             var pixel = cameraGo.AddComponent<PixelPerfectCamera>(); pixel.assetsPPU = 16;
-            pixel.refResolutionX = 240; pixel.refResolutionY = 426;
+            pixel.refResolutionX = 320; pixel.refResolutionY = 180;
             pixel.gridSnapping = PixelPerfectCamera.GridSnapping.PixelSnapping; pixel.cropFrame = PixelPerfectCamera.CropFrame.None;
             var data = cameraGo.GetComponent<UniversalAdditionalCameraData>(); data.renderPostProcessing = true;
             data.antialiasing = AntialiasingMode.None; data.volumeLayerMask = 1;
@@ -181,10 +183,10 @@ namespace Ragna.Editor
             game.spriteMaterial = spriteMaterial;
             PlayerSettings.companyName = "RagnaStudio"; PlayerSettings.productName = "Ragna";
             PlayerSettings.bundleVersion = "0.1.0";
-            PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
-            PlayerSettings.allowedAutorotateToLandscapeLeft = PlayerSettings.allowedAutorotateToLandscapeRight = false;
-            PlayerSettings.allowedAutorotateToPortrait = true; PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
-            PlayerSettings.defaultScreenWidth = 720; PlayerSettings.defaultScreenHeight = 1280;
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = PlayerSettings.allowedAutorotateToLandscapeRight = true;
+            PlayerSettings.allowedAutorotateToPortrait = false; PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+            PlayerSettings.defaultScreenWidth = 1920; PlayerSettings.defaultScreenHeight = 1080;
             PlayerSettings.runInBackground = false;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.ragnastudio.ragna");
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, "com.ragnastudio.ragna");
@@ -198,7 +200,7 @@ namespace Ragna.Editor
             EditorSceneManager.SaveScene(scene, scenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
             AssetDatabase.SaveAssets();
-            return "Ragna scene saved. URP 2D, Korean font, 240x426 / 16 PPU, portrait Android+iOS.";
+            return "Ragna scene saved. URP 2D, Korean font, 320x180 / 16 PPU, 1920x1080 landscape Android+iOS.";
         }
 
         [MenuItem("Ragna/Build Android APK")]

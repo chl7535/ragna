@@ -6,7 +6,7 @@ using UnityEngine.InputSystem.UI;
 
 namespace Ragna
 {
-    public sealed class GameUI
+    public sealed partial class GameUI
     {
         public readonly RectTransform root;
         public RectTransform modal;
@@ -20,38 +20,24 @@ namespace Ragna
         UnityEngine.UI.Image hpFill, xpFill, floorFill;
         UnityEngine.UI.Button potion, guard;
         Rect safe;
-        public GameUI(TMP_FontAsset font, Action drink, Action defend, Action pause, Action growth)
+        public GameUI(TMP_FontAsset font, Action drink, Action defend, Action pause, Action growth, Action prepare)
         {
             this.font = font;
             var canvas = new GameObject("GameCanvas", typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
             canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvas.GetComponent<UnityEngine.UI.CanvasScaler>();
             scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(720, 1280); scaler.matchWidthOrHeight = .5f;
+            scaler.referenceResolution = LandscapeDisplaySettings.Current.referenceResolution; scaler.matchWidthOrHeight = 1;
             root = Box(canvas.transform, "SafeArea", Vector2.zero, Vector2.one);
             if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() == null)
                 new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
             SafeArea();
-            var header = Panel(root, "Header", 0, .795f, 1, 1, ink);
-            Text(header, "R A G N A", .055f, .72f, .5f, .94f, 29, gold, TextAlignmentOptions.MidlineLeft);
-            Button(header, "정지", .83f, .74f, .95f, .94f, pause, 21);
-            title = Text(header, "별빛의 폐허", .055f, .48f, .65f, .73f, 27, white, TextAlignmentOptions.MidlineLeft);
-            floor = Text(header, "01 / 30", .68f, .48f, .95f, .73f, 25, gold, TextAlignmentOptions.MidlineRight);
-            floorFill = Bar(header, .055f, .37f, .945f, .41f, new Color32(139, 164, 185, 255));
-            hpFill = Bar(header, .055f, .13f, .945f, .30f, new Color32(205, 88, 105, 255));
-            hp = Text(header, "HP", .07f, .13f, .93f, .30f, 23, white);
-            var bottom = Panel(root, "ControlPanel", 0, 0, 1, .285f, ink);
-            level = Text(bottom, "검사 · LV.1", .055f, .78f, .70f, .96f, 26, white, TextAlignmentOptions.MidlineLeft);
-            Button(bottom, "성장", .78f, .80f, .945f, .97f, growth, 23);
-            xpFill = Bar(bottom, .055f, .71f, .945f, .735f, gold);
-            skill = Text(bottom, "월광 참격", .055f, .51f, .95f, .69f, 23, gold, TextAlignmentOptions.MidlineLeft);
-            potion = Button(bottom, "", .055f, .14f, .49f, .48f, drink, 26, new Color32(109, 47, 62, 255));
-            potionText = potion.GetComponentInChildren<TMP_Text>();
-            guard = Button(bottom, "", .515f, .14f, .945f, .48f, defend, 26, new Color32(42, 72, 99, 255));
-            guardText = guard.GetComponentInChildren<TMP_Text>();
-            info = Text(bottom, "공격과 스킬은 자동 · 생존은 당신의 선택", .04f, .015f, .96f, .13f, 19, muted);
-            banner = Text(root, "", .06f, .72f, .94f, .79f, 33, gold);
-            hint = Text(root, "", .08f, .29f, .92f, .35f, 21, gold);
+            var hud = UnityEngine.Object.Instantiate(Resources.Load<GameObject>("UI/LandscapeHUD"), root).GetComponent<BattleHUD>();
+            floor = hud.floor; title = hud.title; hp = hud.hp; level = hud.level; skill = hud.skill; info = hud.info;
+            potionText = hud.potionText; guardText = hud.guardText; banner = hud.banner; hint = hud.hint;
+            hpFill = hud.hpFill; xpFill = hud.xpFill; floorFill = hud.floorFill; potion = hud.potion; guard = hud.guard;
+            potion.onClick.AddListener(() => drink()); guard.onClick.AddListener(() => defend());
+            hud.pause.onClick.AddListener(() => pause()); hud.growth.onClick.AddListener(() => growth()); hud.prepare.onClick.AddListener(() => prepare());
         }
         public void SafeArea()
         {
@@ -111,6 +97,7 @@ namespace Ragna
             guardText.text = r.guardTime > 0 ? "보호막 유지 중" : r.guardCd > 0 ? "회피  " + r.guardCd.ToString("0.0") + "초" : "회피 보호막  [W]";
             potion.interactable = model.IsActive && r.potions > 0 && r.potionCd <= 0 && r.hp < model.MaxHp;
             guard.interactable = model.IsActive && r.guardCd <= 0;
+            info.text = r.state == RunState.Fighting ? model.HuntingLabel + " · " + model.SlotCapacity + "칸" : "공격 슬롯은 전투 준비에서 설정합니다";
             banner.text = messageTime > 0 ? message : "";
             hint.text = model.IsActive && r.hp < model.MaxHp * .3f ? "위험! 물약 또는 보호막을 사용하세요" : "";
         }
@@ -119,7 +106,7 @@ namespace Ragna
             Close();
             var shade = Panel(root, "ModalShade", 0, 0, 1, 1, new Color(0.025f, .04f, .075f, .94f));
             shade.GetComponent<UnityEngine.UI.Image>().raycastTarget = true; modal = shade;
-            var content = Panel(shade, "ModalContent", .06f, .075f, .94f, .925f, ink);
+            var content = Panel(shade, "ModalContent", .20f, .035f, .80f, .965f, ink);
             Panel(content, "TopRule", .04f, .975f, .96f, .979f, gold);
             Text(content, heading, .06f, .86f, .94f, .96f, 38, gold);
             Text(content, subtitle, .07f, .75f, .93f, .86f, 23, muted);
@@ -131,7 +118,7 @@ namespace Ragna
             var p = Open("R A G N A", "모든 여정은 모험가에서 시작됩니다");
             Text(p, "최고 " + meta.bestFloor + "층  ·  환생 " + meta.rebirths + "회  ·  정복 " + meta.victories + "회", .05f, .68f, .95f, .75f, 22, gold);
             Text(p, "모험가", .06f, .53f, .94f, .66f, 42, JobData.Colors[(int)Job.Adventurer]);
-            Text(p, "LV.1 · 용기의 일격\n\n20레벨에 첫 직업을 선택합니다\n검사 · 궁수 · 법사 · 거너\n격투가 · 성직자 · 도적\n\n60·100레벨에 다음 전직과 승급\n환생 후에도 모험가로 다시 시작", .07f, .25f, .93f, .53f, 25);
+            Text(p, "LV.1 · 용기의 일격\n\n20레벨에 검사로 전직합니다\n60레벨에 기사 · 광전사 선택\n\n60·100레벨에 다음 전직과 승급\n환생 후에도 모험가로 다시 시작", .07f, .25f, .93f, .53f, 25);
             Button(p, "모험가로 도전 시작", .06f, .09f, .94f, .20f, start, 29, new Color32(99, 76, 47, 255));
             Button(p, "설정 · 계승 도감", .06f, .015f, .94f, .075f, settings, 21);
         }
@@ -152,11 +139,11 @@ namespace Ragna
             if (model.run.job == Job.Adventurer)
             {
                 var selection = Open("첫 전직", "LV.20 · 모험가의 다음 길을 선택하세요\n선택하는 동안 전투는 멈춥니다");
-                for (int i = 0; i < 7; i++)
+                for (int i = 0; i < JobData.AvailableJobs.Length; i++)
                 {
-                    Job job = (Job)i; float top = .73f - i * .088f;
-                    Button(selection, JobData.Names[i] + "  <size=18>" + JobData.Descriptions[i] + "</size>", .055f, top - .078f, .945f, top,
-                        () => promote("job:" + job), 27, Color.Lerp(JobData.Colors[i], ink, .74f));
+                    Job job = JobData.AvailableJobs[i]; int dataIndex = (int)job; float top = .65f - i * .16f;
+                    Button(selection, JobData.Names[dataIndex] + "  <size=18>" + JobData.Descriptions[dataIndex] + "</size>", .055f, top - .14f, .945f, top,
+                        () => promote("job:" + job), 27, Color.Lerp(JobData.Colors[dataIndex], ink, .74f));
                 }
                 Text(selection, "HP 완전 회복 · 직업 스킬 획득 · 물약 +2", .05f, .035f, .95f, .10f, 21, gold);
                 return;

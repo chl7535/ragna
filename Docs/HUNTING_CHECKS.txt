@@ -1,0 +1,1 @@
+PASS: 20 auto-hunting checks. Grounded X/Y pursuit, reach, independent enemy timers, single-target slots and v7 save continuity.

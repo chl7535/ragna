@@ -1,1 +1,1 @@
-PASS: 42 checks; six region ranges and viewport coverage at three portrait aspect ratios; six camera previews.
+PASS: 42 checks; six region ranges and viewport coverage at 16:9, 20:9 and 21:9 landscape ratios; six camera previews.

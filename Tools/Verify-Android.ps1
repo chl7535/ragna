@@ -16,7 +16,7 @@ if ($ragnaManifest -notmatch "package: name='com.ragnastudio.ragna'") { throw 'U
 if ($ragnaManifest -notmatch "native-code: 'arm64-v8a'") { throw 'ARM64 ABI is missing.' }
 if ($ragnaManifest -notmatch "minSdkVersion:'26'") { throw 'Unexpected minimum Android version.' }
 $ragnaXml = & $ragnaAapt dump xmltree $ragnaApk.FullName --file AndroidManifest.xml 2>&1
-if ($LASTEXITCODE -ne 0 -or ($ragnaXml -join "`n") -notmatch 'android:screenOrientation\(0x0101001e\)=1\b') { throw 'Portrait activity orientation is missing.' }
+if ($LASTEXITCODE -ne 0 -or ($ragnaXml -join "`n") -notmatch 'android:screenOrientation\(0x0101001e\)=0\b') { throw 'Landscape activity orientation is missing.' }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $ragnaArchive = [IO.Compression.ZipFile]::OpenRead($ragnaApk.FullName)
 try {
@@ -29,10 +29,10 @@ $ragnaReport = [ordered]@{
     file = 'Ragna/Builds/Android/Ragna.apk'
     bytes = $ragnaApk.Length
     sha256 = (Get-FileHash -LiteralPath $ragnaApk.FullName -Algorithm SHA256).Hash
-    result = 'PASS: APK signature, application ID, ARM64 IL2CPP, Unity libraries, API 26 minimum and portrait orientation'
+    result = 'PASS: APK signature, application ID, ARM64 IL2CPP, Unity libraries, API 26 minimum and landscape orientation'
     signature = @($ragnaSignature | ForEach-Object { "$_" })
-    manifest = @($ragnaBadging | Where-Object { $_ -match '^\s*(package:|minSdkVersion:|targetSdkVersion:|native-code:|launchable-activity:|uses-feature:.*portrait)' } | ForEach-Object { "$_" })
-    orientation = 'portrait (Android screenOrientation=1)'
+    manifest = @($ragnaBadging | Where-Object { $_ -match '^\s*(package:|minSdkVersion:|targetSdkVersion:|native-code:|launchable-activity:|uses-feature:.*landscape)' } | ForEach-Object { "$_" })
+    orientation = 'landscape (Android screenOrientation=0)'
     deviceTested = $false
     note = 'Local test build. Signature verification does not imply release signing or physical-device validation.'
 }
